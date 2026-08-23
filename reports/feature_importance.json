@@ -1,0 +1,50 @@
+[
+  {
+    "feature": "past_return_rate",
+    "gain": 0.2291
+  },
+  {
+    "feature": "device_risk_score",
+    "gain": 0.2058
+  },
+  {
+    "feature": "shipping_billing_mismatch",
+    "gain": 0.123
+  },
+  {
+    "feature": "is_first_time_buyer",
+    "gain": 0.0878
+  },
+  {
+    "feature": "discount_pct",
+    "gain": 0.0723
+  },
+  {
+    "feature": "account_age_days",
+    "gain": 0.0646
+  },
+  {
+    "feature": "category_beauty",
+    "gain": 0.0476
+  },
+  {
+    "feature": "distance_km",
+    "gain": 0.0415
+  },
+  {
+    "feature": "category_grocery",
+    "gain": 0.0382
+  },
+  {
+    "feature": "payment_method_wallet",
+    "gain": 0.0371
+  },
+  {
+    "feature": "is_weekend",
+    "gain": 0.0317
+  },
+  {
+    "feature": "past_order_count",
+    "gain": 0.0271
+  }
+]

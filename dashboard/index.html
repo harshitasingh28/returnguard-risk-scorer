@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReturnGuard — AI Risk Manager</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:#0a0e1a; --bg-soft:#0d1220; --card:#131a2e; --card-2:#0f1526; --line:#232c47;
+    --text:#eef1fb; --muted:#8b93b3; --muted-2:#5f6889;
+    --accent:#5b8cff; --accent-2:#8b6bff;
+    --low:#3ecf8e; --med:#f5b94c; --high:#f2596a;
+    --low-bg:#0f2b1f; --med-bg:#2b220f; --high-bg:#2c1218;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  a { color:inherit; }
+
+  /* ---------- header ---------- */
+  header { padding:24px 28px 12px; border-bottom:1px solid var(--line); }
+  .header-top { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; }
+  header h1 { margin:0 0 4px; font-size:21px; letter-spacing:-0.01em; }
+  header .subtitle { margin:0; color:var(--muted); font-size:13px; }
+  .badges { display:flex; gap:6px; flex-wrap:wrap; }
+  .badge { font-size:11px; padding:4px 10px; border-radius:20px; font-weight:600; letter-spacing:.01em; white-space:nowrap; }
+  .badge.synthetic { background:#2c1218; color:var(--high); border:1px solid #4a1f28; }
+  .badge.defense { background:#0f2b1f; color:var(--low); border:1px solid #1c4632; }
+  .badge.method { background:#1a1440; color:#b7a4ff; border:1px solid #322670; }
+
+  /* ---------- layout ---------- */
+  main { max-width:1180px; margin:0 auto; padding:0 20px; }
+  section { padding:26px 8px; }
+  section.tight { padding-top:14px; padding-bottom:14px; }
+  .section-label { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .section-label h2 { margin:0; font-size:16px; }
+  .section-label .tag { font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:3px 8px; border-radius:5px; }
+  .tag.held-out { background:#12203f; color:#8fb4ff; }
+  .tag.synthetic-ex { background:#2b1740; color:#c9a4ff; }
+  .sub { color:var(--muted); font-size:13px; margin:-8px 0 16px; line-height:1.5; }
+
+  /* ---------- hero KPIs ---------- */
+  .hero-banner { background:linear-gradient(135deg,#101a35,#0d1428); border:1px solid var(--line); border-radius:14px; padding:22px 24px; margin-top:20px; }
+  .hero-banner .tag.held-out { margin-bottom:12px; display:inline-block; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-top:6px; }
+  .kpi { background:var(--card-2); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .kpi .label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
+  .kpi .value { font-size:24px; font-weight:700; line-height:1.1; }
+  .kpi .value.good { color:var(--low); }
+  .kpi .value.warn { color:var(--med); }
+  .kpi .foot { font-size:11px; color:var(--muted-2); margin-top:4px; }
+
+  /* ---------- thresholds panel ---------- */
+  .threshold-panel { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .threshold-card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  .threshold-card h3 { margin:0 0 4px; font-size:13px; }
+  .threshold-card .src { font-size:11px; color:var(--muted-2); margin-bottom:12px; font-family:ui-monospace,Menlo,monospace; }
+  .tbar { position:relative; height:34px; border-radius:8px; overflow:hidden; display:flex; margin-bottom:8px; }
+  .tbar div { display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#0a0e1a; }
+  .tseg-low { background:var(--low); }
+  .tseg-med { background:var(--med); }
+  .tseg-high { background:var(--high); }
+  .tlabels { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); }
+
+  /* ---------- review queue ---------- */
+  .queue-list { display:flex; flex-direction:column; gap:12px; }
+  .queue-card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; display:grid; grid-template-columns:auto 1fr auto; gap:18px; align-items:center; }
+  .queue-card .score-block { text-align:center; min-width:76px; }
+  .score-ring { width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:800; margin:0 auto 4px; border:3px solid; }
+  .score-ring.LOW { border-color:var(--low); color:var(--low); }
+  .score-ring.MEDIUM { border-color:var(--med); color:var(--med); }
+  .score-ring.HIGH { border-color:var(--high); color:var(--high); }
+  .score-block .cat-label { font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .queue-mid .order-meta { font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .queue-mid .order-value { font-weight:700; font-size:15px; margin-right:8px; }
+  .reasons-flow { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .reason-chip { font-size:11px; background:var(--card-2); border:1px solid var(--line); border-radius:6px; padding:4px 9px; color:#c7cde3; }
+  .queue-action { text-align:right; min-width:150px; }
+  .action-badge { display:inline-block; font-size:11px; font-weight:700; padding:6px 12px; border-radius:7px; margin-bottom:8px; letter-spacing:.02em; }
+  .action-badge.APPROVE { background:var(--low-bg); color:var(--low); }
+  .action-badge.VERIFY { background:var(--med-bg); color:var(--med); }
+  .action-badge.BLOCK_MANUAL_REVIEW { background:var(--high-bg); color:var(--high); }
+  .review-btn { display:block; width:100%; background:var(--accent); color:#fff; border:none; border-radius:7px; padding:8px 14px; font-size:12px; font-weight:600; cursor:pointer; }
+  .review-btn:hover { background:#4a78e6; }
+  .review-btn.secondary { background:transparent; border:1px solid var(--line); color:var(--muted); margin-top:6px; }
+  .outcome-note { font-size:10px; color:var(--muted-2); margin-top:6px; text-align:right; }
+
+  /* ---------- audit section ---------- */
+  .audit-divider { margin:36px 0 6px; padding-top:26px; border-top:1px solid var(--line); }
+  .audit-divider .section-label h2 { font-size:18px; }
+  .audit-intro { background:var(--card-2); border:1px solid var(--line); border-radius:10px; padding:14px 18px; font-size:13px; color:#c7cde3; line-height:1.6; margin-bottom:22px; }
+
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .card h3 { margin:0 0 12px; font-size:14px; }
+  canvas { max-height:250px; }
+
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:500; font-size:12px; }
+  tr.winner td { color:var(--low); font-weight:600; }
+
+  footer { padding:24px 28px 50px; color:var(--muted-2); font-size:12px; line-height:1.7; border-top:1px solid var(--line); margin-top:20px; max-width:1180px; margin-left:auto; margin-right:auto; }
+  footer b { color:var(--muted); }
+
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns:repeat(2,1fr); }
+    .threshold-panel, .row2 { grid-template-columns:1fr; }
+    .queue-card { grid-template-columns:1fr; text-align:left; }
+    .queue-action { text-align:left; }
+    .queue-action .review-btn { width:auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div>
+      <h1>🛡️ ReturnGuard — AI Risk Manager</h1>
+      <p class="subtitle">Return-risk detection for merchants · Track 2, Razorpay AI Buildathon</p>
+    </div>
+    <div class="badges">
+      <span class="badge synthetic">Synthetic data demo — not real merchant data</span>
+      <span class="badge defense">Defense-only</span>
+      <span class="badge method">Val-only threshold selection</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ HERO: MERCHANT-FIRST KPIs ============ -->
+  <div class="hero-banner">
+    <span class="tag held-out">Held-out test results</span>
+    <div class="kpi-grid" id="heroKpis"></div>
+  </div>
+
+  <!-- ============ DECISION THRESHOLDS ============ -->
+  <section>
+    <div class="section-label"><h2>How risk scores become decisions</h2></div>
+    <div class="sub">These are the actual thresholds used by the production model and live API — not illustrative numbers.</div>
+    <div class="threshold-panel">
+      <div class="threshold-card">
+        <h3>Business decision (used by the live <code>/score</code> API)</h3>
+        <div class="src">api/main.py — PROD_THRESHOLD, LOW_MED_BOUNDARY</div>
+        <div class="tbar" id="decisionBar"></div>
+        <div class="tlabels" id="decisionLabels"></div>
+      </div>
+      <div class="threshold-card">
+        <h3>Display label (used to color-code the risk score badge)</h3>
+        <div class="src">src/explain.py — risk_category</div>
+        <div class="tbar" id="labelBar"></div>
+        <div class="tlabels"><span>0%</span><span>20%</span><span>50%</span><span>100%</span></div>
+      </div>
+    </div>
+    <div class="sub" style="margin-top:12px">
+      These are two separate, independently-defined systems in the codebase — not a bug. A 45% score is labeled
+      <b style="color:var(--med)">MEDIUM</b> by the display system (20–50% band) while simultaneously triggering
+      <b style="color:var(--high)">BLOCK_MANUAL_REVIEW</b> by the business-decision system (≥26%, the cost-optimal
+      threshold selected on validation data). See the Review Queue below for a live example of this.
+    </div>
+  </section>
+
+  <!-- ============ REVIEW QUEUE ============ -->
+  <section>
+    <div class="section-label">
+      <h2>Review queue</h2>
+      <span class="tag synthetic-ex">Representative held-out examples · synthetic</span>
+    </div>
+    <div class="sub">Real held-out test orders the model scored, shown end-to-end: risk score → why it was flagged → what the merchant should do.</div>
+    <div class="queue-list" id="queueList"></div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- METHODOLOGY & AUDIT (moved below the fold, clearly separated) -->
+  <!-- ============================================================ -->
+  <div class="audit-divider">
+    <div class="section-label"><h2>📋 Methodology &amp; Audit</h2></div>
+    <div class="audit-intro">
+      Everything below is the ML evaluation record, not merchant-facing product UI. Dataset is synthetic
+      (v2: 5 latent customer segments, overlapping behavior, per-order noise — deliberately hardened after
+      an earlier version let the model over-fit a recoverable label formula). All metrics are from the
+      <b>held-out test set</b> unless labeled otherwise. Results demonstrate methodology soundness, not
+      real-world production performance. Full history in README.md.
+    </div>
+  </div>
+
+  <section class="tight">
+    <div class="section-label"><h2>Model benchmark</h2><span class="tag held-out">Held-out test</span></div>
+    <div class="row2">
+      <div class="card"><h3>Precision / Recall / F1 / PR-AUC / ROC-AUC</h3><canvas id="metricsChart"></canvas></div>
+      <div class="card"><h3>Cost reduction vs. approve-everything</h3><canvas id="costChart"></canvas></div>
+    </div>
+  </section>
+
+  <section class="tight">
+    <div class="section-label"><h2>Full model comparison</h2><span class="tag held-out">Held-out test</span></div>
+    <div class="card"><table id="modelTable"></table></div>
+  </section>
+
+  <section class="tight">
+    <div class="section-label"><h2>Review-capacity analysis</h2><span class="tag held-out">Held-out test, winning model</span></div>
+    <div class="sub">"If a merchant can only manually review the top K% of orders" — net savings turns negative between 10% and 15% capacity.</div>
+    <div class="card"><table id="capacityTable"></table></div>
+  </section>
+
+  <section class="tight">
+    <div class="row2">
+      <div class="card"><h3>Expected cost vs. threshold</h3><canvas id="costCurveChart"></canvas></div>
+      <div class="card">
+        <h3>Calibration check (reliability curve)</h3>
+        <div class="sub" style="margin:-4px 0 8px">Predicted probability vs. observed rate per bin. Near the diagonal = well calibrated.</div>
+        <canvas id="calibChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="tight">
+    <div class="section-label"><h2>Confusion matrix</h2><span class="tag held-out">Held-out test, winning model</span></div>
+    <div class="card"><table id="cmTable"></table></div>
+  </section>
+
+  <section class="tight">
+    <div class="section-label"><h2>Segment breakdown</h2><span class="tag held-out">Held-out test — directional only</span></div>
+    <div class="sub">Small per-segment sample sizes (305–939) — read as indicative, not a definitive statistical claim.</div>
+    <div class="card"><table id="segmentTable"></table></div>
+  </section>
+
+  <section class="tight">
+    <div class="section-label"><h2>Temporal-shift robustness</h2><span class="tag held-out">Frozen threshold, no tuning</span></div>
+    <div class="sub">Fresh model trained on an early window, evaluated on a distant later window (buffer skipped between them).</div>
+    <div class="card"><table id="temporalTable"></table></div>
+  </section>
+
+  <section class="tight">
+    <div class="section-label"><h2>Global feature importance</h2></div>
+    <div class="card"><canvas id="featChart" style="max-height:300px"></canvas></div>
+  </section>
+
+</main>
+
+<footer>
+  <b>Dataset:</b> synthetic v2 — 5 latent customer segments, overlapping behavior, per-order noise shock
+  (not a directly recoverable label formula). <b>Cost model:</b> FN = 0.35×order_value, FP = ₹45 + 0.06×order_value
+  (documented assumptions, not measured real figures). <b>This is a synthetic evaluation environment</b> —
+  results demonstrate methodology soundness (leakage prevention, calibration, cost-sensitive decisioning,
+  temporal robustness), not real-world production performance. Full audit trail, dataset-hardening history,
+  and stated limitations in README.md.
+</footer>
+
+<script>
+const REPORT = {"cost_model": {"false_negative_cost": "0.35 * order_value", "false_positive_cost": "INR 45 flat + 0.06 * order_value"}, "dataset_summary": {"note": "v2 dataset: noisy latent-segment behavioral process, not a direct recoverable formula", "val_n": 3300, "val_pos_rate": 0.1491, "test_n": 3301, "test_pos_rate": 0.1421}, "models": [{"model": "logreg", "selected_threshold": 0.26, "validation_metrics": {"model": "logreg", "split": "validation", "threshold_used": 0.26, "precision": 0.3526, "recall": 0.1118, "f1": 0.1698, "pr_auc": 0.2333, "roc_auc": 0.6029, "confusion_matrix": {"tn": 2707, "fp": 101, "fn": 437, "tp": 55}, "expected_total_cost_inr": 136973.63, "naive_approve_all_cost_inr": 141559.07, "cost_reduction_pct": 3.24, "n_orders": 3300, "n_actual_positive": 492}, "test_metrics_held_out": {"model": "logreg", "split": "test_held_out", "threshold_used": 0.26, "precision": 0.3307, "recall": 0.0896, "f1": 0.1409, "pr_auc": 0.2133, "roc_auc": 0.5989, "confusion_matrix": {"tn": 2747, "fp": 85, "fn": 427, "tp": 42}, "expected_total_cost_inr": 136902.14, "naive_approve_all_cost_inr": 140491.45, "cost_reduction_pct": 2.55, "n_orders": 3301, "n_actual_positive": 469}, "calibration_audit_test_set": {"brier_score": 0.1193, "reliability_bins": [{"bin_range": "0.00-0.10", "n": 365, "mean_predicted": 0.0913, "observed_positive_rate": 0.0959}, {"bin_range": "0.10-0.20", "n": 2526, "mean_predicted": 0.1384, "observed_positive_rate": 0.1298}, {"bin_range": "0.20-0.30", "n": 352, "mean_predicted": 0.2334, "observed_positive_rate": 0.2415}, {"bin_range": "0.30-0.40", "n": 53, "mean_predicted": 0.3344, "observed_positive_rate": 0.3585}, {"bin_range": "0.40-0.50", "n": 5, "mean_predicted": 0.4271, "observed_positive_rate": 0.4}]}}, {"model": "random_forest", "selected_threshold": 0.22, "validation_metrics": {"model": "random_forest", "split": "validation", "threshold_used": 0.22, "precision": 0.2779, "recall": 0.1972, "f1": 0.2307, "pr_auc": 0.2399, "roc_auc": 0.6038, "confusion_matrix": {"tn": 2556, "fp": 252, "fn": 395, "tp": 97}, "expected_total_cost_inr": 136004.89, "naive_approve_all_cost_inr": 141559.07, "cost_reduction_pct": 3.92, "n_orders": 3300, "n_actual_positive": 492}, "test_metrics_held_out": {"model": "random_forest", "split": "test_held_out", "threshold_used": 0.22, "precision": 0.2632, "recall": 0.1812, "f1": 0.2146, "pr_auc": 0.2094, "roc_auc": 0.5892, "confusion_matrix": {"tn": 2594, "fp": 238, "fn": 384, "tp": 85}, "expected_total_cost_inr": 140149.3, "naive_approve_all_cost_inr": 140491.45, "cost_reduction_pct": 0.24, "n_orders": 3301, "n_actual_positive": 469}, "calibration_audit_test_set": {"brier_score": 0.1197, "reliability_bins": [{"bin_range": "0.00-0.10", "n": 341, "mean_predicted": 0.091, "observed_positive_rate": 0.1173}, {"bin_range": "0.10-0.20", "n": 2517, "mean_predicted": 0.1346, "observed_positive_rate": 0.1291}, {"bin_range": "0.20-0.30", "n": 360, "mean_predicted": 0.2362, "observed_positive_rate": 0.2083}, {"bin_range": "0.30-0.40", "n": 80, "mean_predicted": 0.3394, "observed_positive_rate": 0.3625}, {"bin_range": "0.40-0.50", "n": 3, "mean_predicted": 0.4064, "observed_positive_rate": 0.0}]}}, {"model": "xgboost", "selected_threshold": 0.23, "validation_metrics": {"model": "xgboost", "split": "validation", "threshold_used": 0.23, "precision": 0.3309, "recall": 0.0915, "f1": 0.1433, "pr_auc": 0.2083, "roc_auc": 0.5708, "confusion_matrix": {"tn": 2717, "fp": 91, "fn": 447, "tp": 45}, "expected_total_cost_inr": 138137.43, "naive_approve_all_cost_inr": 141559.07, "cost_reduction_pct": 2.42, "n_orders": 3300, "n_actual_positive": 492}, "test_metrics_held_out": {"model": "xgboost", "split": "test_held_out", "threshold_used": 0.23, "precision": 0.2857, "recall": 0.0725, "f1": 0.1156, "pr_auc": 0.1941, "roc_auc": 0.5707, "confusion_matrix": {"tn": 2747, "fp": 85, "fn": 435, "tp": 34}, "expected_total_cost_inr": 140866.21, "naive_approve_all_cost_inr": 140491.45, "cost_reduction_pct": -0.27, "n_orders": 3301, "n_actual_positive": 469}, "calibration_audit_test_set": {"brier_score": 0.1205, "reliability_bins": [{"bin_range": "0.00-0.10", "n": 154, "mean_predicted": 0.0926, "observed_positive_rate": 0.1558}, {"bin_range": "0.10-0.20", "n": 2856, "mean_predicted": 0.1423, "observed_positive_rate": 0.1324}, {"bin_range": "0.20-0.30", "n": 284, "mean_predicted": 0.2271, "observed_positive_rate": 0.2289}, {"bin_range": "0.30-0.40", "n": 7, "mean_predicted": 0.3116, "observed_positive_rate": 0.2857}]}}], "rule_based_baseline": {"model": "rule_based_past_return_rate", "split": "test_held_out", "threshold_used": 0.72, "precision": 0.2809, "recall": 0.0533, "f1": 0.0896, "pr_auc": 0.1811, "roc_auc": 0.5846, "confusion_matrix": {"tn": 2768, "fp": 64, "fn": 444, "tp": 25}, "expected_total_cost_inr": 136889.48, "naive_approve_all_cost_inr": 140491.45, "cost_reduction_pct": 2.56, "n_orders": 3301, "n_actual_positive": 469}, "calibration_audit": {}, "review_capacity": [{"review_capacity_pct": 1.0, "n_reviewed": 33, "precision": 0.3636, "recall": 0.0256, "risky_cases_caught": 12, "review_cost_inr": 1485.0, "expected_loss_prevented_inr": 3612.2, "net_savings_inr": 751.29}, {"review_capacity_pct": 5.0, "n_reviewed": 165, "precision": 0.303, "recall": 0.1066, "risky_cases_caught": 50, "review_cost_inr": 7425.0, "expected_loss_prevented_inr": 16165.32, "net_savings_inr": 2418.3}, {"review_capacity_pct": 10.0, "n_reviewed": 330, "precision": 0.2636, "recall": 0.1855, "risky_cases_caught": 87, "review_cost_inr": 14850.0, "expected_loss_prevented_inr": 27425.0, "net_savings_inr": 180.57}, {"review_capacity_pct": 15.0, "n_reviewed": 495, "precision": 0.2444, "recall": 0.258, "risky_cases_caught": 121, "review_cost_inr": 22275.0, "expected_loss_prevented_inr": 38682.1, "net_savings_inr": -2911.45}, {"review_capacity_pct": 20.0, "n_reviewed": 660, "precision": 0.2273, "recall": 0.3198, "risky_cases_caught": 150, "review_cost_inr": 29700.0, "expected_loss_prevented_inr": 47505.08, "net_savings_inr": -7769.09}], "cost_curve_production": [{"threshold": 0.01, "precision": 0.1421, "recall": 1.0, "n_false_positive": 2832, "n_false_negative": 0, "expected_cost": 272037.98}, {"threshold": 0.02, "precision": 0.1421, "recall": 1.0, "n_false_positive": 2832, "n_false_negative": 0, "expected_cost": 272037.98}, {"threshold": 0.03, "precision": 0.1421, "recall": 1.0, "n_false_positive": 2832, "n_false_negative": 0, "expected_cost": 272037.98}, {"threshold": 0.04, "precision": 0.1421, "recall": 1.0, "n_false_positive": 2832, "n_false_negative": 0, "expected_cost": 272037.98}, {"threshold": 0.05, "precision": 0.1421, "recall": 1.0, "n_false_positive": 2832, "n_false_negative": 0, "expected_cost": 272037.98}, {"threshold": 0.06, "precision": 0.1421, "recall": 1.0, "n_false_positive": 2832, "n_false_negative": 0, "expected_cost": 272037.98}, {"threshold": 0.07, "precision": 0.1422, "recall": 1.0, "n_false_positive": 2829, "n_false_negative": 0, "expected_cost": 271716.01}, {"threshold": 0.08, "precision": 0.1431, "recall": 0.9979, "n_false_positive": 2803, "n_false_negative": 1, "expected_cost": 269117.88}, {"threshold": 0.09, "precision": 0.1452, "recall": 0.9808, "n_false_positive": 2709, "n_false_negative": 9, "expected_cost": 262521.4}, {"threshold": 0.1, "precision": 0.1478, "recall": 0.9254, "n_false_positive": 2502, "n_false_negative": 35, "expected_cost": 250868.57}, {"threshold": 0.11, "precision": 0.1559, "recall": 0.8635, "n_false_positive": 2193, "n_false_negative": 64, "expected_cost": 229650.67}, {"threshold": 0.12, "precision": 0.1632, "recall": 0.7612, "n_false_positive": 1830, "n_false_negative": 112, "expected_cost": 208081.05}, {"threshold": 0.13, "precision": 0.1677, "recall": 0.6439, "n_false_positive": 1499, "n_false_negative": 167, "expected_cost": 194255.22}, {"threshold": 0.14, "precision": 0.1744, "recall": 0.5501, "n_false_positive": 1221, "n_false_negative": 211, "expected_cost": 178998.57}, {"threshold": 0.15, "precision": 0.1916, "recall": 0.4883, "n_false_positive": 966, "n_false_negative": 240, "expected_cost": 161425.94}, {"threshold": 0.16, "precision": 0.2008, "recall": 0.4179, "n_false_positive": 780, "n_false_negative": 273, "expected_cost": 154016.39}, {"threshold": 0.17, "precision": 0.2153, "recall": 0.3667, "n_false_positive": 627, "n_false_negative": 297, "expected_cost": 146406.2}, {"threshold": 0.18, "precision": 0.2247, "recall": 0.3028, "n_false_positive": 490, "n_false_negative": 327, "expected_cost": 142860.81}, {"threshold": 0.19, "precision": 0.2374, "recall": 0.2601, "n_false_positive": 392, "n_false_negative": 347, "expected_cost": 138977.92}, {"threshold": 0.2, "precision": 0.2585, "recall": 0.226, "n_false_positive": 304, "n_false_negative": 363, "expected_cost": 135216.22}, {"threshold": 0.21, "precision": 0.2555, "recall": 0.1748, "n_false_positive": 239, "n_false_negative": 387, "expected_cost": 137172.22}, {"threshold": 0.22, "precision": 0.2825, "recall": 0.162, "n_false_positive": 193, "n_false_negative": 393, "expected_cost": 133937.45}, {"threshold": 0.23, "precision": 0.2864, "recall": 0.1343, "n_false_positive": 157, "n_false_negative": 406, "expected_cost": 133227.32}, {"threshold": 0.24, "precision": 0.3048, "recall": 0.1215, "n_false_positive": 130, "n_false_negative": 412, "expected_cost": 135281.75}, {"threshold": 0.25, "precision": 0.3245, "recall": 0.1045, "n_false_positive": 102, "n_false_negative": 420, "expected_cost": 134738.85}, {"threshold": 0.26, "precision": 0.3307, "recall": 0.0896, "n_false_positive": 85, "n_false_negative": 427, "expected_cost": 136902.14}, {"threshold": 0.27, "precision": 0.34, "recall": 0.0725, "n_false_positive": 66, "n_false_negative": 435, "expected_cost": 137857.73}, {"threshold": 0.28, "precision": 0.3614, "recall": 0.064, "n_false_positive": 53, "n_false_negative": 439, "expected_cost": 137118.03}, {"threshold": 0.29, "precision": 0.3768, "recall": 0.0554, "n_false_positive": 43, "n_false_negative": 443, "expected_cost": 137201.52}, {"threshold": 0.3, "precision": 0.3621, "recall": 0.0448, "n_false_positive": 37, "n_false_negative": 448, "expected_cost": 138727.6}, {"threshold": 0.31, "precision": 0.3556, "recall": 0.0341, "n_false_positive": 29, "n_false_negative": 453, "expected_cost": 139485.42}, {"threshold": 0.32, "precision": 0.359, "recall": 0.0299, "n_false_positive": 25, "n_false_negative": 455, "expected_cost": 139327.2}, {"threshold": 0.33, "precision": 0.32, "recall": 0.0171, "n_false_positive": 17, "n_false_negative": 461, "expected_cost": 140314.18}, {"threshold": 0.34, "precision": 0.3182, "recall": 0.0149, "n_false_positive": 15, "n_false_negative": 462, "expected_cost": 140825.13}, {"threshold": 0.35, "precision": 0.3684, "recall": 0.0149, "n_false_positive": 12, "n_false_negative": 462, "expected_cost": 140389.71}, {"threshold": 0.36, "precision": 0.4118, "recall": 0.0149, "n_false_positive": 10, "n_false_negative": 462, "expected_cost": 140211.82}, {"threshold": 0.37, "precision": 0.3571, "recall": 0.0107, "n_false_positive": 9, "n_false_negative": 464, "expected_cost": 140538.65}, {"threshold": 0.38, "precision": 0.3636, "recall": 0.0085, "n_false_positive": 7, "n_false_negative": 465, "expected_cost": 140342.84}, {"threshold": 0.39, "precision": 0.5, "recall": 0.0085, "n_false_positive": 4, "n_false_negative": 465, "expected_cost": 140057.76}, {"threshold": 0.4, "precision": 0.4, "recall": 0.0043, "n_false_positive": 3, "n_false_negative": 467, "expected_cost": 140365.31}, {"threshold": 0.41, "precision": 0.5, "recall": 0.0043, "n_false_positive": 2, "n_false_negative": 467, "expected_cost": 140284.2}, {"threshold": 0.42, "precision": 0.6667, "recall": 0.0043, "n_false_positive": 1, "n_false_negative": 467, "expected_cost": 140153.4}, {"threshold": 0.43, "precision": 0.5, "recall": 0.0021, "n_false_positive": 1, "n_false_negative": 468, "expected_cost": 140471.88}, {"threshold": 0.44, "precision": 0.0, "recall": 0.0, "n_false_positive": 1, "n_false_negative": 469, "expected_cost": 140569.69}, {"threshold": 0.45, "precision": 0.0, "recall": 0.0, "n_false_positive": 1, "n_false_negative": 469, "expected_cost": 140569.69}, {"threshold": 0.46, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.47, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.48, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.49, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.5, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.51, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.52, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.53, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.54, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.55, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.56, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.57, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.58, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.59, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.6, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.61, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.62, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.63, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.64, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.65, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.66, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.67, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.68, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.69, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.7, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.71, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.72, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.73, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.74, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.75, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.76, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.77, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.78, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.79, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.8, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.81, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.82, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.83, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.84, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.85, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.86, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.87, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.88, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.89, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.9, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.91, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.92, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.93, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.94, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}, {"threshold": 0.95, "precision": 0.0, "recall": 0.0, "n_false_positive": 0, "n_false_negative": 469, "expected_cost": 140491.45}], "winning_model": "logreg", "segment_breakdown": [{"segment_type": "category", "segment": "apparel", "n": 939, "positive_rate": 0.1576, "precision": 0.3571, "recall": 0.1014}, {"segment_type": "category", "segment": "beauty", "n": 479, "positive_rate": 0.1378, "precision": 0.5, "recall": 0.0606}, {"segment_type": "category", "segment": "electronics", "n": 733, "positive_rate": 0.1323, "precision": 0.3103, "recall": 0.0928}, {"segment_type": "category", "segment": "footwear", "n": 350, "positive_rate": 0.1714, "precision": 0.2609, "recall": 0.1}, {"segment_type": "category", "segment": "grocery", "n": 305, "positive_rate": 0.1311, "precision": 0.2143, "recall": 0.075}, {"segment_type": "category", "segment": "home", "n": 495, "positive_rate": 0.1172, "precision": 0.4545, "recall": 0.0862}, {"segment_type": "order_value_quartile", "segment": "Q1_low", "n": 826, "positive_rate": 0.1368, "precision": 0.5, "recall": 0.1416}, {"segment_type": "order_value_quartile", "segment": "Q2", "n": 825, "positive_rate": 0.137, "precision": 0.2222, "recall": 0.0531}, {"segment_type": "order_value_quartile", "segment": "Q3", "n": 825, "positive_rate": 0.1467, "precision": 0.3125, "recall": 0.0826}, {"segment_type": "order_value_quartile", "segment": "Q4_high", "n": 825, "positive_rate": 0.1479, "precision": 0.2778, "recall": 0.082}], "temporal_shift_robustness": {"purpose": "Diagnostic robustness check only. Does NOT affect the production model, threshold, or any file under models/. Not used for tuning.", "methodology": "Fresh LogisticRegression trained on the EARLY window's inner fit-slice (80% of EARLY), calibrated (sigmoid) on EARLY's remaining inner calib-slice (20% of EARLY) -- mirroring the production pipeline's own calibration discipline. The LATE window is touched only once, for final scoring, exactly as the production test set is.", "early_window": {"n": 13200, "date_start": "2026-01-01", "date_end": "2026-05-06", "inner_fit_n": 10560, "inner_calib_n": 2640, "positive_rate": 0.1456}, "buffer_skipped_n": 4400, "late_window_shift_test": {"n": 4400, "date_start": "2026-06-17", "date_end": "2026-07-29", "positive_rate": 0.1423}, "categories_in_late_not_in_early": null, "frozen_threshold_used": 0.26, "frozen_threshold_source": "production winning model (logreg), selected on the ORIGINAL validation split -- reused as-is here, not re-tuned", "precision": 0.3431, "recall": 0.0751, "f1": 0.1232, "pr_auc": 0.2129, "roc_auc": 0.5946, "confusion_matrix": {"tn": 3684, "fp": 90, "fn": 579, "tp": 47}, "expected_cost_inr": 183790.72, "naive_approve_all_cost_inr": 189248.79, "cost_reduction_pct": 2.88, "comparison_to_original_held_out_test": {"original_precision": 0.3307, "original_recall": 0.0896, "original_cost_reduction_pct": 2.55, "note": "Original test set is the next 15% of chronologically-sorted rows after training; this experiment uses a stricter, more distant later window with a skipped buffer."}}};
+const SCENARIOS = [{"scenario": "low_risk_example", "true_outcome": "NOT_RETURNED", "input": {"order_value": 1346.94, "discount_pct": 14.5, "num_items": 1, "hour_of_day": 8, "is_weekend": 1, "shipping_billing_mismatch": 0, "device_risk_score": 0.033, "distance_km": 8.5, "past_return_rate": 0.0, "past_order_count": 1, "account_age_days": 1022, "is_first_time_buyer": 0, "category": "beauty", "payment_method": "wallet"}, "model_output": {"risk_score_pct": 6.4, "risk_category": "LOW", "explained_by_model": "logreg", "top_reasons": []}}, {"scenario": "medium_risk_example", "true_outcome": "NOT_RETURNED", "input": {"order_value": 496.21, "discount_pct": 26.6, "num_items": 3, "hour_of_day": 0, "is_weekend": 0, "shipping_billing_mismatch": 0, "device_risk_score": 0.243, "distance_km": 211.3, "past_return_rate": 0.0, "past_order_count": 3, "account_age_days": 1048, "is_first_time_buyer": 0, "category": "apparel", "payment_method": "upi"}, "model_output": {"risk_score_pct": 13.4, "risk_category": "LOW", "explained_by_model": "logreg", "top_reasons": [{"feature": "discount_pct", "value": 26.6, "contribution": 0.0671, "reason": "Order was placed at an unusually high discount"}]}}, {"scenario": "highest_scored_example", "true_outcome": "NOT_RETURNED", "input": {"order_value": 553.98, "discount_pct": 23.5, "num_items": 2, "hour_of_day": 21, "is_weekend": 0, "shipping_billing_mismatch": 1, "device_risk_score": 0.467, "distance_km": 48.7, "past_return_rate": 0.667, "past_order_count": 12, "account_age_days": 344, "is_first_time_buyer": 0, "category": "apparel", "payment_method": "cod"}, "model_output": {"risk_score_pct": 45.2, "risk_category": "MEDIUM", "explained_by_model": "logreg", "top_reasons": [{"feature": "shipping_billing_mismatch", "value": 1.0, "contribution": 0.5715, "reason": "Shipping and billing addresses don't match"}, {"feature": "past_return_rate", "value": 0.667, "contribution": 0.5175, "reason": "This customer's past return rate is elevated"}, {"feature": "device_risk_score", "value": 0.467, "contribution": 0.3346, "reason": "Device/session shows unusual risk signals"}, {"feature": "past_order_count", "value": 12.0, "contribution": 0.1591, "reason": "Limited order history to establish trust"}]}}, {"scenario": "true_positive_caught", "true_outcome": "RETURNED", "input": {"order_value": 279.47, "discount_pct": 32.6, "num_items": 2, "hour_of_day": 22, "is_weekend": 0, "shipping_billing_mismatch": 1, "device_risk_score": 0.609, "distance_km": 486.4, "past_return_rate": 0.5, "past_order_count": 4, "account_age_days": 926, "is_first_time_buyer": 0, "category": "footwear", "payment_method": "card"}, "model_output": {"risk_score_pct": 43.4, "risk_category": "MEDIUM", "explained_by_model": "logreg", "top_reasons": [{"feature": "shipping_billing_mismatch", "value": 1.0, "contribution": 0.5715, "reason": "Shipping and billing addresses don't match"}, {"feature": "device_risk_score", "value": 0.609, "contribution": 0.5185, "reason": "Device/session shows unusual risk signals"}, {"feature": "past_return_rate", "value": 0.5, "contribution": 0.3531, "reason": "This customer's past return rate is elevated"}, {"feature": "discount_pct", "value": 32.6, "contribution": 0.1061, "reason": "Order was placed at an unusually high discount"}]}}];
+const FEATURES = [{"feature": "past_return_rate", "gain": 0.2291}, {"feature": "device_risk_score", "gain": 0.2058}, {"feature": "shipping_billing_mismatch", "gain": 0.123}, {"feature": "is_first_time_buyer", "gain": 0.0878}, {"feature": "discount_pct", "gain": 0.0723}, {"feature": "account_age_days", "gain": 0.0646}, {"feature": "category_beauty", "gain": 0.0476}, {"feature": "distance_km", "gain": 0.0415}, {"feature": "category_grocery", "gain": 0.0382}, {"feature": "payment_method_wallet", "gain": 0.0371}, {"feature": "is_weekend", "gain": 0.0317}, {"feature": "past_order_count", "gain": 0.0271}];
+
+function fmtPct(x) { return (x*100).toFixed(1)+'%'; }
+function fmtMoney(x) { return '₹'+Math.round(x).toLocaleString('en-IN'); }
+
+function decisionFor(scorePct, threshold, lowMed) {
+  const p = scorePct/100;
+  if (p >= threshold) return 'BLOCK_MANUAL_REVIEW';
+  if (p >= lowMed) return 'VERIFY';
+  return 'APPROVE';
+}
+const ACTION_LABEL = { APPROVE:'Approve', VERIFY:'Verify before shipping', BLOCK_MANUAL_REVIEW:'Manual review required' };
+
+function init() {
+  const winner = REPORT.winning_model;
+  const models = REPORT.models;
+  const winnerEntry = models.find(m => m.model === winner);
+  const prodTest = winnerEntry.test_metrics_held_out;
+  const threshold = winnerEntry.selected_threshold;
+  const lowMed = Math.round(threshold*0.6*10000)/10000;
+  const rb = REPORT.rule_based_baseline;
+
+  // ---------- HERO KPIs (merchant-first) ----------
+  const cm = prodTest.confusion_matrix;
+  const flagged = cm.tp + cm.fp;
+  const netSavings = prodTest.naive_approve_all_cost_inr - prodTest.expected_total_cost_inr;
+  const cap5 = REPORT.review_capacity.find(r => r.review_capacity_pct === 5.0);
+
+  const kpis = [
+    ['Orders analyzed', prodTest.n_orders.toLocaleString('en-IN'), ''],
+    ['High-risk orders flagged', flagged, `${fmtPct(flagged/prodTest.n_orders)} of orders`],
+    ['Review queue (5% capacity)', cap5 ? cap5.n_reviewed : '—', 'recommended operating point'],
+    ['Estimated loss (with model)', fmtMoney(prodTest.expected_total_cost_inr), 'held-out test set'],
+    ['Net savings vs. no model', fmtMoney(netSavings), `${prodTest.cost_reduction_pct}% cost reduction`],
+  ];
+  document.getElementById('heroKpis').innerHTML = kpis.map(([label,val,foot],i) =>
+    `<div class="kpi"><div class="label">${label}</div><div class="value ${i===4?'good':''}">${val}</div><div class="foot">${foot}</div></div>`
+  ).join('');
+
+  // ---------- THRESHOLD PANELS ----------
+  const blockPct = (threshold*100).toFixed(1);
+  const verifyPct = (lowMed*100).toFixed(1);
+  document.getElementById('decisionBar').innerHTML = `
+    <div class="tseg-low" style="width:${lowMed*100}%">APPROVE</div>
+    <div class="tseg-med" style="width:${(threshold-lowMed)*100}%">VERIFY</div>
+    <div class="tseg-high" style="width:${(1-threshold)*100}%">BLOCK</div>`;
+  document.getElementById('decisionLabels').innerHTML =
+    `<span>0%</span><span>${verifyPct}%</span><span>${blockPct}%</span><span>100%</span>`;
+  document.getElementById('labelBar').innerHTML = `
+    <div class="tseg-low" style="width:20%">LOW</div>
+    <div class="tseg-med" style="width:30%">MEDIUM</div>
+    <div class="tseg-high" style="width:50%">HIGH</div>`;
+
+  // ---------- REVIEW QUEUE ----------
+  const displayName = { low_risk_example:'Low-risk order', medium_risk_example:'Borderline order',
+    highest_scored_example:'Highest-scored order in test set', true_positive_caught:'Confirmed risky order (caught)' };
+  document.getElementById('queueList').innerHTML = SCENARIOS.map(s => {
+    const o = s.model_output;
+    const decision = decisionFor(o.risk_score_pct, threshold, lowMed);
+    const reasons = o.top_reasons.length
+      ? o.top_reasons.map(r => `<span class="reason-chip">${r.reason}</span>`).join('')
+      : `<span class="reason-chip">No strong risk-elevating factors detected</span>`;
+    return `
+    <div class="queue-card">
+      <div class="score-block">
+        <div class="score-ring ${o.risk_category}">${o.risk_score_pct}%</div>
+        <div class="cat-label">${o.risk_category}</div>
+      </div>
+      <div class="queue-mid">
+        <div class="order-meta">
+          <span class="order-value">₹${s.input.order_value}</span>
+          ${s.input.category} · ${s.input.payment_method} · ${displayName[s.scenario] || s.scenario}
+        </div>
+        <div class="reasons-flow">${reasons}</div>
+      </div>
+      <div class="queue-action">
+        <div class="action-badge ${decision}">${ACTION_LABEL[decision]}</div>
+        <button class="review-btn">Review order</button>
+        <button class="review-btn secondary">View full detail</button>
+        <div class="outcome-note">Held-out actual outcome: ${s.true_outcome === 'RETURNED' ? 'Was returned' : 'Not returned'}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // ---------- AUDIT: model benchmark ----------
+  new Chart(document.getElementById('metricsChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Precision','Recall','F1','PR-AUC','ROC-AUC'],
+      datasets: models.map((m,i) => ({
+        label: m.model,
+        data: [m.test_metrics_held_out.precision, m.test_metrics_held_out.recall, m.test_metrics_held_out.f1,
+               m.test_metrics_held_out.pr_auc, m.test_metrics_held_out.roc_auc],
+        backgroundColor: ['#3d4a7a','#8b6bff','#5b8cff'][i % 3],
+      }))
+    },
+    options: { scales: { y: { beginAtZero:true, max:1, ticks:{color:'#8b93b3'} }, x:{ticks:{color:'#8b93b3'}} }, plugins:{legend:{labels:{color:'#eef1fb'}}} }
+  });
+
+  new Chart(document.getElementById('costChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Rule-based (no ML)', ...models.map(m=>m.model)],
+      datasets: [{ label:'Cost reduction %',
+        data:[rb.cost_reduction_pct, ...models.map(m => m.test_metrics_held_out.cost_reduction_pct)],
+        backgroundColor:['#5a4a2c','#3d4a7a','#8b6bff','#5b8cff'] }]
+    },
+    options: { plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{color:'#8b93b3'}}, x:{ticks:{color:'#8b93b3'}}} }
+  });
+
+  let rows = `<tr><th>Model</th><th>Precision</th><th>Recall</th><th>F1</th><th>PR-AUC</th><th>Brier</th><th>Cost Reduction</th></tr>`;
+  rows += `<tr><td>Rule-based (past_return_rate)</td><td>${fmtPct(rb.precision)}</td><td>${fmtPct(rb.recall)}</td><td>${fmtPct(rb.f1)}</td><td>—</td><td>—</td><td>${rb.cost_reduction_pct}%</td></tr>`;
+  models.forEach(m => {
+    const t = m.test_metrics_held_out;
+    const cls = m.model === winner ? 'winner' : '';
+    rows += `<tr class="${cls}"><td>${m.model}${m.model===winner?' ★':''}</td><td>${fmtPct(t.precision)}</td><td>${fmtPct(t.recall)}</td><td>${fmtPct(t.f1)}</td><td>${t.pr_auc}</td><td>${m.calibration_audit_test_set.brier_score}</td><td>${t.cost_reduction_pct}%</td></tr>`;
+  });
+  document.getElementById('modelTable').innerHTML = rows;
+
+  let capRows = `<tr><th>Review Capacity</th><th>Reviewed</th><th>Precision</th><th>Recall</th><th>Caught</th><th>Review Cost</th><th>Loss Prevented</th><th>Net Savings</th></tr>`;
+  REPORT.review_capacity.forEach(r => {
+    const savColor = r.net_savings_inr >= 0 ? 'var(--low)' : 'var(--high)';
+    capRows += `<tr><td>${r.review_capacity_pct}%</td><td>${r.n_reviewed}</td><td>${fmtPct(r.precision)}</td><td>${fmtPct(r.recall)}</td><td>${r.risky_cases_caught}</td><td>₹${r.review_cost_inr.toLocaleString('en-IN')}</td><td>₹${r.expected_loss_prevented_inr.toLocaleString('en-IN')}</td><td style="color:${savColor}">₹${r.net_savings_inr.toLocaleString('en-IN')}</td></tr>`;
+  });
+  document.getElementById('capacityTable').innerHTML = capRows;
+
+  const curve = REPORT.cost_curve_production;
+  new Chart(document.getElementById('costCurveChart'), {
+    type: 'line',
+    data: { labels: curve.map(c => c.threshold),
+      datasets: [{ label:'Expected cost (INR)', data: curve.map(c => c.expected_cost),
+        borderColor:'#5b8cff', backgroundColor:'rgba(91,140,255,0.1)', fill:true, pointRadius:0 }] },
+    options: { plugins:{legend:{display:false}}, scales:{ x:{ ticks:{ maxTicksLimit:8, color:'#8b93b3' } }, y:{ beginAtZero:true, ticks:{color:'#8b93b3'} } } }
+  });
+
+  const calib = winnerEntry.calibration_audit_test_set.reliability_bins;
+  new Chart(document.getElementById('calibChart'), {
+    type: 'scatter',
+    data: { datasets: [
+      { label:'Perfect calibration', data:[{x:0,y:0},{x:1,y:1}], type:'line', borderColor:'#3d4a7a', borderDash:[4,4], pointRadius:0 },
+      { label:'Observed', data: calib.map(b => ({x:b.mean_predicted, y:b.observed_positive_rate})), backgroundColor:'#5b8cff', pointRadius:6 },
+    ]},
+    options: { scales:{ x:{ min:0, max:0.6, title:{display:true,text:'Mean predicted',color:'#8b93b3'}, ticks:{color:'#8b93b3'} },
+                         y:{ min:0, max:0.6, title:{display:true,text:'Observed rate',color:'#8b93b3'}, ticks:{color:'#8b93b3'} } },
+               plugins:{legend:{labels:{color:'#eef1fb'}}} }
+  });
+
+  document.getElementById('cmTable').innerHTML = `
+    <tr><th></th><th>Predicted: Not Risky</th><th>Predicted: Risky</th></tr>
+    <tr><td><b>Actual: Not Risky</b></td><td>${cm.tn} (TN)</td><td>${cm.fp} (FP)</td></tr>
+    <tr><td><b>Actual: Risky</b></td><td>${cm.fn} (FN)</td><td>${cm.tp} (TP)</td></tr>`;
+
+  if (REPORT.segment_breakdown) {
+    let segRows = `<tr><th>Type</th><th>Segment</th><th>n</th><th>Positive Rate</th><th>Precision</th><th>Recall</th></tr>`;
+    REPORT.segment_breakdown.forEach(s => {
+      segRows += `<tr><td>${s.segment_type}</td><td>${s.segment}</td><td>${s.n}</td><td>${fmtPct(s.positive_rate)}</td><td>${s.precision!==null?fmtPct(s.precision):'—'}</td><td>${s.recall!==null?fmtPct(s.recall):'—'}</td></tr>`;
+    });
+    document.getElementById('segmentTable').innerHTML = segRows;
+  }
+
+  if (REPORT.temporal_shift_robustness) {
+    const ts = REPORT.temporal_shift_robustness;
+    const cmp = ts.comparison_to_original_held_out_test;
+    let tRows = `<tr><th></th><th>Original Held-out Test</th><th>Temporal-Shift (Later Window)</th></tr>`;
+    tRows += `<tr><td>Precision</td><td>${fmtPct(cmp.original_precision)}</td><td>${fmtPct(ts.precision)}</td></tr>`;
+    tRows += `<tr><td>Recall</td><td>${fmtPct(cmp.original_recall)}</td><td>${fmtPct(ts.recall)}</td></tr>`;
+    tRows += `<tr><td>ROC-AUC</td><td>—</td><td>${ts.roc_auc}</td></tr>`;
+    tRows += `<tr><td>Cost reduction</td><td>${cmp.original_cost_reduction_pct}%</td><td>${ts.cost_reduction_pct}%</td></tr>`;
+    tRows += `<tr><td>Window</td><td>Next 15% chronologically</td><td>${ts.late_window_shift_test.date_start} → ${ts.late_window_shift_test.date_end} (${ts.buffer_skipped_n}-order buffer skipped)</td></tr>`;
+    document.getElementById('temporalTable').innerHTML = tRows;
+  }
+
+  new Chart(document.getElementById('featChart'), {
+    type: 'bar',
+    data: { labels: FEATURES.map(f => f.feature), datasets: [{ label:'Importance', data: FEATURES.map(f => f.gain), backgroundColor:'#8b6bff' }] },
+    options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true, ticks:{color:'#8b93b3'}}, y:{ticks:{color:'#8b93b3'}}} }
+  });
+}
+init();
+</script>
+</body>
+</html>

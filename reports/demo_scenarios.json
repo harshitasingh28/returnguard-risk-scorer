@@ -1,0 +1,163 @@
+[
+  {
+    "scenario": "low_risk_example",
+    "true_outcome": "NOT_RETURNED",
+    "input": {
+      "order_value": 1346.94,
+      "discount_pct": 14.5,
+      "num_items": 1,
+      "hour_of_day": 8,
+      "is_weekend": 1,
+      "shipping_billing_mismatch": 0,
+      "device_risk_score": 0.033,
+      "distance_km": 8.5,
+      "past_return_rate": 0.0,
+      "past_order_count": 1,
+      "account_age_days": 1022,
+      "is_first_time_buyer": 0,
+      "category": "beauty",
+      "payment_method": "wallet"
+    },
+    "model_output": {
+      "risk_score_pct": 6.4,
+      "risk_category": "LOW",
+      "explained_by_model": "logreg",
+      "top_reasons": []
+    }
+  },
+  {
+    "scenario": "medium_risk_example",
+    "true_outcome": "NOT_RETURNED",
+    "input": {
+      "order_value": 496.21,
+      "discount_pct": 26.6,
+      "num_items": 3,
+      "hour_of_day": 0,
+      "is_weekend": 0,
+      "shipping_billing_mismatch": 0,
+      "device_risk_score": 0.243,
+      "distance_km": 211.3,
+      "past_return_rate": 0.0,
+      "past_order_count": 3,
+      "account_age_days": 1048,
+      "is_first_time_buyer": 0,
+      "category": "apparel",
+      "payment_method": "upi"
+    },
+    "model_output": {
+      "risk_score_pct": 13.4,
+      "risk_category": "LOW",
+      "explained_by_model": "logreg",
+      "top_reasons": [
+        {
+          "feature": "discount_pct",
+          "value": 26.6,
+          "contribution": 0.0671,
+          "reason": "Order was placed at an unusually high discount"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": "highest_scored_example",
+    "true_outcome": "NOT_RETURNED",
+    "input": {
+      "order_value": 553.98,
+      "discount_pct": 23.5,
+      "num_items": 2,
+      "hour_of_day": 21,
+      "is_weekend": 0,
+      "shipping_billing_mismatch": 1,
+      "device_risk_score": 0.467,
+      "distance_km": 48.7,
+      "past_return_rate": 0.667,
+      "past_order_count": 12,
+      "account_age_days": 344,
+      "is_first_time_buyer": 0,
+      "category": "apparel",
+      "payment_method": "cod"
+    },
+    "model_output": {
+      "risk_score_pct": 45.2,
+      "risk_category": "MEDIUM",
+      "explained_by_model": "logreg",
+      "top_reasons": [
+        {
+          "feature": "shipping_billing_mismatch",
+          "value": 1.0,
+          "contribution": 0.5715,
+          "reason": "Shipping and billing addresses don't match"
+        },
+        {
+          "feature": "past_return_rate",
+          "value": 0.667,
+          "contribution": 0.5175,
+          "reason": "This customer's past return rate is elevated"
+        },
+        {
+          "feature": "device_risk_score",
+          "value": 0.467,
+          "contribution": 0.3346,
+          "reason": "Device/session shows unusual risk signals"
+        },
+        {
+          "feature": "past_order_count",
+          "value": 12.0,
+          "contribution": 0.1591,
+          "reason": "Limited order history to establish trust"
+        }
+      ]
+    }
+  },
+  {
+    "scenario": "true_positive_caught",
+    "true_outcome": "RETURNED",
+    "input": {
+      "order_value": 279.47,
+      "discount_pct": 32.6,
+      "num_items": 2,
+      "hour_of_day": 22,
+      "is_weekend": 0,
+      "shipping_billing_mismatch": 1,
+      "device_risk_score": 0.609,
+      "distance_km": 486.4,
+      "past_return_rate": 0.5,
+      "past_order_count": 4,
+      "account_age_days": 926,
+      "is_first_time_buyer": 0,
+      "category": "footwear",
+      "payment_method": "card"
+    },
+    "model_output": {
+      "risk_score_pct": 43.4,
+      "risk_category": "MEDIUM",
+      "explained_by_model": "logreg",
+      "top_reasons": [
+        {
+          "feature": "shipping_billing_mismatch",
+          "value": 1.0,
+          "contribution": 0.5715,
+          "reason": "Shipping and billing addresses don't match"
+        },
+        {
+          "feature": "device_risk_score",
+          "value": 0.609,
+          "contribution": 0.5185,
+          "reason": "Device/session shows unusual risk signals"
+        },
+        {
+          "feature": "past_return_rate",
+          "value": 0.5,
+          "contribution": 0.3531,
+          "reason": "This customer's past return rate is elevated"
+        },
+        {
+          "feature": "discount_pct",
+          "value": 32.6,
+          "contribution": 0.1061,
+          "reason": "Order was placed at an unusually high discount"
+        }
+      ]
+    }
+  }
+]
